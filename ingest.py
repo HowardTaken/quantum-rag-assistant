@@ -5,6 +5,7 @@ from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import chromadb
+import subprocess
 
 load_dotenv()
 
@@ -70,6 +71,33 @@ def embed_and_store(chunks):
 
     print(f"\nDone. {collection.count()} vectors stored in {CHROMA_DIR}/")
 
+def auto_git_push():
+    print("\n📦 Starting automated GitHub synchronization...")
+    try:
+        # 1. Stage all changes (including the updated chroma_db folder)
+        subprocess.run(["git", "add", "."], check=True)
+        
+        # 2. Create the commit message
+        commit_message = "Auto-update: Embedded new research papers and updated vector database"
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        
+        # 3. Push to your main branch
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("🚀 Successfully pushed updates to GitHub! Your cloud app is updating now.")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git automation failed: {e}")
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during Git push: {e}")
+
+# SINGLE ENTRY POINT
 if __name__ == "__main__":
+    # 1. Load data
     chunks = load_and_split()
+    
+    # 2. Process data and save to Chroma
     embed_and_store(chunks)
+    print("Database ingestion complete!")
+    
+    # 3. Synchronize changes to the cloud
+    auto_git_push()
