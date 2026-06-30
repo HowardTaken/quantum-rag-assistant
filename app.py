@@ -2,6 +2,7 @@ import streamlit as st
 import tempfile
 import os
 import time
+import shutil  # Added for copying the database
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rag_agent import load_vector_store, build_chain, ask
@@ -19,7 +20,19 @@ st.caption("Ask questions about your semiconductor physics papers. Powered by Ge
 # 2. CACHE CHAIN AND VECTOR STORE
 @st.cache_resource(show_spinner="Loading vector store...")
 def get_backend():
-    db = load_vector_store()  # This is your active vector store instance
+    # --- STREAMLIT CLOUD READ-ONLY WORKAROUND ---
+    writable_db_path = "/tmp/chroma_db_writable"
+    
+    # If the temporary copy doesn't exist yet in this session, create it
+    if not os.path.exists(writable_db_path):
+        if os.path.exists("chroma_db"):
+            shutil.copytree("chroma_db", writable_db_path)
+        else:
+            # Fallback if chroma_db doesn't exist at all yet
+            os.makedirs(writable_db_path)
+    
+    # Pass the writable path to the agent
+    db = load_vector_store(db_path=writable_db_path)  
     chain = build_chain(db)
     return db, chain
 
@@ -50,7 +63,7 @@ if uploaded_file is not None:
                 st.write(f"Trickle-feeding {len(chunks)} chunks to avoid API limits...")
                 progress_bar = st.progress(0)
 
-                # --- PROPERLY INDENTED LOOP ---
+                # --- RATE LIMIT FIX: PROPERLY INDENTED LOOP ---
                 for i, chunk in enumerate(chunks):
                     vector_store.add_documents([chunk])
                     
@@ -59,7 +72,7 @@ if uploaded_file is not None:
                     
                     # Wait 0.65 seconds to stay under the 100 requests/minute limit
                     time.sleep(0.65)
-                # ------------------------------
+                # ----------------------------------------------
                 
                 os.remove(tmp_path)
                 
