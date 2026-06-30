@@ -4,6 +4,7 @@ import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rag_agent import load_vector_store, build_chain, ask
+import time
 
 # 1. MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(
@@ -46,7 +47,16 @@ if uploaded_file is not None:
                 chunks = text_splitter.split_documents(pages)
                 
                 st.write(f"Injecting {len(chunks)} chunks into active session context...")
-                vector_store.add_documents(chunks)
+                # 3. Inject the temporary chunks with a rate-limit delay
+st.write(f"Trickle-feeding {len(chunks)} chunks to avoid API limits...")
+progress_bar = st.progress(0)
+
+for i, chunk in enumerate(chunks):
+    vector_store.add_documents([chunk])
+    # Update progress bar
+    progress_bar.progress((i + 1) / len(chunks))
+    # Wait 0.65 seconds to guarantee we stay under the 100 requests/minute limit
+    time.sleep(0.65)
                 
                 os.remove(tmp_path)
                 
