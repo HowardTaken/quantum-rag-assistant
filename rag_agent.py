@@ -31,12 +31,13 @@ def format_docs(docs):
         for d in docs
     )
 
-def load_vector_store():
+# --- FIX APPLIED: Added db_path parameter ---
+def load_vector_store(db_path=CHROMA_DIR):
     embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
     db = Chroma(
         collection_name="rag_docs",
         embedding_function=embeddings,
-        persist_directory=CHROMA_DIR,
+        persist_directory=db_path,  # Uses the passed path instead of hardcoding
     )
     return db
 
