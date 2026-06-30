@@ -1,0 +1,12 @@
+# Environment
+.env
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# chroma_db/ is intentionally NOT ignored — pre-built DB is committed for deployment
