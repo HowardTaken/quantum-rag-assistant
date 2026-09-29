@@ -29,6 +29,17 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Comma-separated allowed origins for the API's CORS policy. Defaults cover local
+    # frontend dev servers plus the GitHub Pages deployment; override via the
+    # CORS_ORIGINS env var if the frontend ever moves.
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,https://howardtaken.github.io"
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
 
 def _missing_env_error(exc: ValidationError) -> Exception:
     missing = [str(e["loc"][0]) for e in exc.errors() if e["type"] == "missing"]

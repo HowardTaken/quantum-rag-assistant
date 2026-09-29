@@ -40,3 +40,18 @@ def test_get_settings_wraps_missing_key_as_runtime_error(monkeypatch, tmp_path):
     get_settings.cache_clear()
     with pytest.raises(RuntimeError, match=".env.example"):
         get_settings()
+
+
+def test_cors_origins_list_splits_and_strips_the_default():
+    settings = Settings(_env_file=None, google_api_key="k")
+    assert settings.cors_origins_list == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://howardtaken.github.io",
+    ]
+
+
+def test_cors_origins_list_respects_override(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", " https://example.com , https://other.example.com ")
+    get_settings.cache_clear()
+    assert get_settings().cors_origins_list == ["https://example.com", "https://other.example.com"]

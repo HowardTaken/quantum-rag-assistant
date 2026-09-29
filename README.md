@@ -153,18 +153,29 @@ the embedding model.
 
 ## Deployment
 
-Not deployed anywhere yet. Prepped but untested (no Docker available in the environment this
-was built in):
+**Frontend:** live at [howardtaken.github.io/quantum-rag-assistant](https://howardtaken.github.io/quantum-rag-assistant/),
+deployed automatically by [`.github/workflows/deploy-frontend.yml`](.github/workflows/deploy-frontend.yml)
+on every push to `master` that touches `frontend/`. GitHub Pages is configured with
+`build_type: workflow`, so there's no separate hosting account.
 
-- `Dockerfile` / `docker-compose.yml` — builds the FastAPI backend with the pre-built
-  `chroma_db/` baked in.
-- `render.yaml` — one-click Render deploy of that image; set `GOOGLE_API_KEY` as a secret in
-  the Render dashboard.
-- Streamlit Cloud is the simplest path for `app.py` specifically (no Docker needed, deploys
-  straight from the repo).
-- The frontend is a static build (`frontend/dist/` after `npm run build`) — deploys to
-  Vercel/Netlify/GitHub Pages with zero server config, pointed at the deployed backend via
-  `VITE_API_URL`.
+**Backend:** not deployed yet. `Dockerfile` / `render.yaml` are prepped for Render but the
+Docker build itself is still untested (no Docker available in the environment this was built
+in) — deploy via Render's dashboard (New → Blueprint → connect this repo → set
+`GOOGLE_API_KEY` in Render's secret UI, never committed or shared elsewhere) and it'll pick up
+`render.yaml` automatically. Once it's up, set the frontend's build to point at it:
+
+```bash
+gh variable set VITE_API_URL --body "https://<your-render-service>.onrender.com"
+```
+
+then re-run the `Deploy frontend to GitHub Pages` workflow (or push any change under
+`frontend/`) to rebuild with that URL baked in. The backend's CORS (`config.py`'s
+`cors_origins`, overridable via a `CORS_ORIGINS` env var) already allows the GitHub Pages
+origin by default, so no backend change is needed once it's deployed.
+
+Streamlit Cloud deploy for `app.py` was considered and skipped on purpose — the React
+frontend + API is the real deployment target; a second hosted UI would just be a second place
+for the API key to live for no real benefit.
 
 ## Known limitations / next steps
 
@@ -177,5 +188,5 @@ was built in):
   curl, which returned correct data, but that's not the same as eyeballing the rendered UI.
 - Grading is a second LLM call per answer, which adds latency/cost; a cheaper heuristic
   (e.g. checking citation presence) could gate whether the LLM grader even runs.
-- CORS on the backend is wide open (`allow_origins=["*"]`) for local development; tighten
-  before pointing a real deployed frontend at a real deployed backend.
+- The backend isn't deployed yet, so the live frontend has nothing to talk to until Render
+  is set up (see Deployment above) and `VITE_API_URL` is pointed at it.

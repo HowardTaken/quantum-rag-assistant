@@ -35,11 +35,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Quantum RAG Agent API", version="1.0.0", lifespan=lifespan)
 
-# Permissive for local dev / a same-origin-less SPA during development; tighten
-# allow_origins to the deployed frontend's URL before shipping this publicly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_settings().cors_origins_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )
