@@ -60,6 +60,27 @@ GRADE_PROMPT = (
 _SOURCE_RE = re.compile(r"\[Source: (?P<source>[^,]+), page (?P<page>[^\]]+)\]")
 
 
+def _message_text(content) -> str:
+    """Normalize a message's `.content` to plain text.
+
+    Some Gemini responses (and other providers) return content as a list of
+    typed blocks (e.g. `[{"type": "text", "text": "...", "extras": {...}}]`)
+    rather than a plain string. Naively str()-ing that leaks internal fields
+    like signature blobs straight into the user-facing answer.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "".join(parts)
+    return str(content)
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     attempts: int
@@ -114,7 +135,9 @@ def build_agent(
             return {}
 
         transcript = "\n\n".join(
-            f"{m.type}: {m.content}" for m in state["messages"] if getattr(m, "content", None)
+            f"{m.type}: {_message_text(m.content)}"
+            for m in state["messages"]
+            if getattr(m, "content", None)
         )
         verdict = grader_llm.invoke(
             [SystemMessage(content=GRADE_PROMPT), HumanMessage(content=transcript)]
@@ -172,7 +195,7 @@ def ask_with_sources(question: str, agent, thread_id: str = "default") -> dict:
     messages = result["messages"]
     final = messages[-1]
     return {
-        "answer": str(final.content),
+        "answer": _message_text(final.content),
         "sources": extract_sources(messages),
         "attempts": result.get("attempts", 0),
     }

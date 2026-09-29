@@ -9,4 +9,8 @@ __pycache__/
 *.pyd
 .Python
 
+# Test/tool caches
+.pytest_cache/
+.ruff_cache/
+
 # chroma_db/ is intentionally NOT ignored — pre-built DB is committed for deployment

@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph import END
 
-from agent import extract_sources, route_after_agent, route_after_grade
+from agent import _message_text, extract_sources, route_after_agent, route_after_grade
 
 
 def test_route_after_agent_goes_to_tools_when_tool_calls_present():
@@ -54,3 +54,23 @@ def test_extract_sources_deduplicates():
 def test_extract_sources_ignores_non_search_tool_messages():
     msg = ToolMessage(content="- a.pdf (2 chunks)", name="list_available_papers", tool_call_id="1")
     assert extract_sources([msg]) == []
+
+
+def test_message_text_passes_through_plain_string():
+    assert _message_text("hello") == "hello"
+
+
+def test_message_text_extracts_text_from_content_block_list():
+    # Some Gemini responses come back as a list of typed blocks with extra
+    # provider-internal fields (e.g. a signature) instead of a plain string.
+    content = [{"type": "text", "text": "the answer", "extras": {"signature": "abc123"}}]
+    assert _message_text(content) == "the answer"
+
+
+def test_message_text_joins_multiple_text_blocks_and_skips_non_text():
+    content = [
+        {"type": "text", "text": "part one. "},
+        {"type": "thinking", "thinking": "internal reasoning, not shown"},
+        {"type": "text", "text": "part two."},
+    ]
+    assert _message_text(content) == "part one. part two."
