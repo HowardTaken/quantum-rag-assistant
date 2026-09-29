@@ -7,7 +7,7 @@ project to get hands-on with agentic RAG design: tool use, self-critique/re-retr
 multi-turn memory, not just a static retrieve-then-generate chain.
 
 **Stack:** LangGraph agent · Gemini (`gemini-2.5-flash` + `gemini-embedding-001`) · ChromaDB
-(persistent, local) · FastAPI backend · Streamlit / terminal front ends.
+(persistent, local) · FastAPI backend · React/Vite frontend · Streamlit / terminal front ends.
 
 ## Why an agent, not a chain
 
@@ -47,14 +47,15 @@ papers/*.pdf --ingest.py--> chroma_db/ (persistent vector store)
                              agent.py (LangGraph agent)
                               /          \
                     main.py (terminal)   backend/ (FastAPI: /health /papers /query)
-                    app.py (Streamlit)          \
-                                          (future) React frontend
+                    app.py (Streamlit)          |
+                                          frontend/ (React/Vite SPA)
 ```
 
 `main.py` and `app.py` are local UIs that import the agent directly, in-process — no HTTP
 hop needed for a single local user. `backend/` is a separate FastAPI service exposing the
-same agent over HTTP, which is what an external client (a JS frontend, another tool, a
-teammate's script) would talk to instead of importing Python.
+same agent over HTTP; `frontend/` is a React SPA that talks to it over `fetch`, and is what
+an external client (or a teammate's script) would model itself on instead of importing
+Python.
 
 | File | Responsibility |
 |---|---|
@@ -63,6 +64,7 @@ teammate's script) would talk to instead of importing Python.
 | [`tools.py`](tools.py) | Vector store access + the two tools bound to the agent. |
 | [`agent.py`](agent.py) | The LangGraph state machine described above. |
 | [`backend/`](backend/) | FastAPI service: `POST /query`, `GET /papers`, `GET /health`. |
+| [`frontend/`](frontend/) | React + TypeScript + Vite chat UI for the backend. |
 | [`main.py`](main.py) | Rich-based terminal chat client. |
 | [`app.py`](app.py) | Streamlit web chat client. |
 | [`eval/retrieval_eval.py`](eval/retrieval_eval.py) | Manual retrieval-quality check (see below). |
@@ -92,6 +94,18 @@ python main.py                              # terminal chat
 streamlit run app.py                        # web chat UI
 uvicorn backend.main:app --reload            # HTTP API on :8000
 ```
+
+For the React frontend, run the backend as above, then in a separate terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev                                  # dev server on :5173
+```
+
+See [frontend/README.md](frontend/README.md) for details. Verified end-to-end on this
+machine: `npm run build` type-checks and bundles clean, and the dev server's cross-origin
+requests to the backend (CORS preflight + `POST /query`) work as the browser would make them.
 
 Example API call:
 
@@ -148,14 +162,19 @@ was built in):
   the Render dashboard.
 - Streamlit Cloud is the simplest path for `app.py` specifically (no Docker needed, deploys
   straight from the repo).
+- The frontend is a static build (`frontend/dist/` after `npm run build`) — deploys to
+  Vercel/Netlify/GitHub Pages with zero server config, pointed at the deployed backend via
+  `VITE_API_URL`.
 
 ## Known limitations / next steps
 
 - The Docker image uses the full `requirements.txt` (includes Streamlit/rich, unneeded by
   the API) rather than a trimmed backend-only dependency list — untrimmed because I couldn't
   verify a minimal set without being able to actually build the image.
-- No React/JS frontend yet — `backend/` exists specifically so one can be added without
-  touching the agent or Python UIs.
+- The frontend has no visual regression check and wasn't clicked through in an actual
+  browser (no browser automation tool was available) — verified via `npm run build`'s
+  type-check and by replaying the exact cross-origin requests the browser would make with
+  curl, which returned correct data, but that's not the same as eyeballing the rendered UI.
 - Grading is a second LLM call per answer, which adds latency/cost; a cheaper heuristic
   (e.g. checking citation presence) could gate whether the LLM grader even runs.
 - CORS on the backend is wide open (`allow_origins=["*"]`) for local development; tighten
