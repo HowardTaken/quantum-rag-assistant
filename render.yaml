@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: quantum-rag-agent-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+    healthCheckPath: /health

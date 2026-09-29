@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+papers/
+tests/
+eval/
+.claude/
+main.py
+app.py
