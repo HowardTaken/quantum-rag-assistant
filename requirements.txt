@@ -20,6 +20,7 @@ cryptography==48.0.0
 dataclasses-json==0.6.7
 distro==1.9.0
 durationpy==0.10
+fastapi==0.141.1
 filelock==3.29.0
 filetype==1.2.0
 flatbuffers==25.12.19
@@ -100,6 +101,7 @@ Pygments==2.20.0
 pypdf==6.11.0
 PyPika==0.51.1
 pyproject_hooks==1.2.0
+pytest==9.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-multipart==0.0.32

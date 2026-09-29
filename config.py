@@ -30,15 +30,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
 
+def _missing_env_error(exc: ValidationError) -> Exception:
+    missing = [str(e["loc"][0]) for e in exc.errors() if e["type"] == "missing"]
+    if not missing:
+        return exc
+    return RuntimeError(
+        f"Missing required environment variable(s): {', '.join(missing)}. "
+        "Copy .env.example to .env and fill in your Google API key."
+    )
+
+
 @lru_cache
 def get_settings() -> Settings:
     try:
         return Settings()
     except ValidationError as exc:
-        missing = [str(e["loc"][0]) for e in exc.errors() if e["type"] == "missing"]
-        if missing:
-            raise RuntimeError(
-                f"Missing required environment variable(s): {', '.join(missing)}. "
-                "Copy .env.example to .env and fill in your Google API key."
-            ) from exc
-        raise
+        raise _missing_env_error(exc) from exc
