@@ -5,5 +5,11 @@ services:
       - "8000:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - API_KEY=${API_KEY:-}
     volumes:
       - ./chroma_db:/app/chroma_db
+      # checkpoints.sqlite is intentionally not mounted: bind-mounting a file that
+      # doesn't exist on the host yet makes Docker create a directory there instead,
+      # which breaks sqlite3.connect(). Conversation state is container-local here and
+      # resets on `docker-compose up --build`; fine for local testing, since this
+      # compose file isn't the actual deploy path (Render's dashboard-driven build is).

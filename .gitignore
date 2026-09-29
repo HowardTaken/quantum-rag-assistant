@@ -13,4 +13,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Conversation checkpoint state -- runtime data, not source (SQLite in WAL mode also
+# creates -shm/-wal sidecar files alongside the main one)
+checkpoints.sqlite*
+
 # chroma_db/ is intentionally NOT ignored — pre-built DB is committed for deployment

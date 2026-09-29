@@ -12,6 +12,7 @@ function mockFetchOnce(body: unknown, init: { ok?: boolean; status?: number } = 
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("fetchHealth", () => {
@@ -63,5 +64,34 @@ describe("postQuery", () => {
   it("throws the backend's detail message when the query fails", async () => {
     mockFetchOnce({ detail: "Failed to process query" }, { ok: false, status: 500 });
     await expect(postQuery("bad", "t1")).rejects.toThrow("Failed to process query");
+  });
+
+  it("does not send an X-API-Key header when VITE_API_KEY is unset", async () => {
+    vi.stubEnv("VITE_API_KEY", "");
+    mockFetchOnce({ answer: "hi", sources: [], attempts: 0 });
+    await postQuery("hi", "t1");
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Record<string, string>)["X-API-Key"]).toBeUndefined();
+  });
+
+  it("sends the X-API-Key header when VITE_API_KEY is set", async () => {
+    vi.stubEnv("VITE_API_KEY", "secret123");
+    mockFetchOnce({ answer: "hi", sources: [], attempts: 0 });
+    await postQuery("hi", "t1");
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Record<string, string>)["X-API-Key"]).toBe("secret123");
+  });
+});
+
+describe("fetchPapers auth header", () => {
+  it("sends the X-API-Key header when VITE_API_KEY is set", async () => {
+    vi.stubEnv("VITE_API_KEY", "secret123");
+    mockFetchOnce({ papers: {} });
+    await fetchPapers();
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Record<string, string>)["X-API-Key"]).toBe("secret123");
   });
 });

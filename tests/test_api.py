@@ -35,9 +35,14 @@ def client(monkeypatch):
     backend_main.app.dependency_overrides[backend_main.get_db] = lambda: FakeChroma(
         metadatas=[{"source": "a.pdf"}, {"source": "b.pdf"}]
     )
+    # Rate limiting is covered by its own dedicated tests below; disable it here so the
+    # rest of the suite hammering /query and /papers doesn't trip it and fail on order.
+    backend_main.limiter.enabled = False
     with TestClient(backend_main.app) as c:
         yield c
     backend_main.app.dependency_overrides.clear()
+    backend_main.limiter.enabled = True
+    backend_main.limiter.reset()
 
 
 def test_health(client):
@@ -87,3 +92,88 @@ def test_health_returns_503_when_not_initialized(monkeypatch):
     with TestClient(backend_main.app) as c:
         resp = c.get("/health")
     assert resp.status_code == 503
+
+
+# --- auth -------------------------------------------------------------------------
+# The `client` fixture runs with no API_KEY set (conftest's autouse fixture only sets
+# GOOGLE_API_KEY), so auth is disabled by default there. These tests set API_KEY
+# explicitly to exercise the enforced path.
+
+
+def test_query_unauthenticated_when_no_api_key_configured(client):
+    # Belt-and-suspenders check that the default (API_KEY unset) truly skips the check,
+    # since every other test in this file implicitly relies on that.
+    resp = client.post("/query", json={"question": "hi"})
+    assert resp.status_code == 200
+
+
+def test_query_rejects_missing_key_when_configured(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    backend_main.get_settings.cache_clear()
+    resp = client.post("/query", json={"question": "hi"})
+    assert resp.status_code == 401
+
+
+def test_query_rejects_wrong_key_when_configured(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    backend_main.get_settings.cache_clear()
+    resp = client.post("/query", json={"question": "hi"}, headers={"X-API-Key": "wrong"})
+    assert resp.status_code == 401
+
+
+def test_query_accepts_correct_key_when_configured(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    backend_main.get_settings.cache_clear()
+    resp = client.post(
+        "/query", json={"question": "hi"}, headers={"X-API-Key": "secret123"}
+    )
+    assert resp.status_code == 200
+
+
+def test_papers_also_requires_the_key_when_configured(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret123")
+    backend_main.get_settings.cache_clear()
+    assert client.get("/papers").status_code == 401
+    assert client.get("/papers", headers={"X-API-Key": "secret123"}).status_code == 200
+
+
+def test_health_never_requires_a_key(client, monkeypatch):
+    # /health has no require_api_key dependency at all -- it should stay reachable for
+    # uptime monitoring regardless of whether API_KEY is configured.
+    monkeypatch.setenv("API_KEY", "secret123")
+    backend_main.get_settings.cache_clear()
+    assert client.get("/health").status_code == 200
+
+
+# --- rate limiting ------------------------------------------------------------------
+
+
+def test_query_rate_limit_returns_429_after_exceeding_the_limit(client, monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_QUERY", "2/minute")
+    backend_main.get_settings.cache_clear()
+    backend_main.limiter.enabled = True
+    backend_main.limiter.reset()
+    try:
+        for _ in range(2):
+            assert client.post("/query", json={"question": "hi"}).status_code == 200
+        resp = client.post("/query", json={"question": "hi"})
+        assert resp.status_code == 429
+    finally:
+        backend_main.limiter.enabled = False
+        backend_main.limiter.reset()
+
+
+def test_rate_limit_is_tracked_per_endpoint_not_globally(client, monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_QUERY", "1/minute")
+    monkeypatch.setenv("RATE_LIMIT_DEFAULT", "5/minute")
+    backend_main.get_settings.cache_clear()
+    backend_main.limiter.enabled = True
+    backend_main.limiter.reset()
+    try:
+        assert client.post("/query", json={"question": "hi"}).status_code == 200
+        assert client.post("/query", json={"question": "hi"}).status_code == 429
+        # /papers has its own, much higher limit and shouldn't be affected by /query's.
+        assert client.get("/papers").status_code == 200
+    finally:
+        backend_main.limiter.enabled = False
+        backend_main.limiter.reset()

@@ -22,6 +22,15 @@ export interface PapersResponse {
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
+// Baked into the public build (like API_URL) -- this is NOT a secret. It only blocks
+// naive scrapers/random-URL traffic from spending the backend's Gemini quota; anyone who
+// opens devtools can read it from the bundle. See require_api_key() in backend/main.py.
+// Read inline (not cached at module scope) so tests can stub it per-case.
+function authHeaders(): HeadersInit {
+  const apiKey = import.meta.env.VITE_API_KEY;
+  return apiKey ? { "X-API-Key": apiKey } : {};
+}
+
 class ApiError extends Error {}
 
 async function parseErrorDetail(res: Response): Promise<string> {
@@ -41,7 +50,7 @@ export async function fetchHealth(): Promise<HealthResponse> {
 }
 
 export async function fetchPapers(): Promise<PapersResponse> {
-  const res = await fetch(`${API_URL}/papers`);
+  const res = await fetch(`${API_URL}/papers`, { headers: authHeaders() });
   if (!res.ok) throw new ApiError(await parseErrorDetail(res));
   return res.json();
 }
@@ -49,7 +58,7 @@ export async function fetchPapers(): Promise<PapersResponse> {
 export async function postQuery(question: string, threadId: string): Promise<QueryResponse> {
   const res = await fetch(`${API_URL}/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ question, thread_id: threadId }),
   });
   if (!res.ok) throw new ApiError(await parseErrorDetail(res));

@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY config.py tools.py agent.py ./
+COPY config.py tools.py agent.py checkpointer.py ./
 COPY backend/ backend/
 COPY chroma_db/ chroma_db/
 

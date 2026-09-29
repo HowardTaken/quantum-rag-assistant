@@ -38,6 +38,10 @@ jobs:
         env:
           # Set via: gh variable set VITE_API_URL --body "https://<your-render-app>.onrender.com"
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Not a secret -- ships in the public JS bundle regardless. A GH Actions
+          # "variable" (not "secret") is the honest choice here; see api.ts's comment.
+          # Set via: gh variable set VITE_API_KEY --body "<value also set as API_KEY on Render>"
+          VITE_API_KEY: ${{ vars.VITE_API_KEY }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
