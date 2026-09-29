@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 
 import chromadb
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -27,6 +28,12 @@ def load_and_split():
         chunk_overlap=settings.chunk_overlap,
     )
     chunks = splitter.split_documents(documents)
+    for chunk in chunks:
+        # PyPDFDirectoryLoader stores the full (OS-specific) path; normalize to the
+        # bare filename so citations shown to users don't leak "papers\..." paths.
+        source = chunk.metadata.get("source")
+        if source:
+            chunk.metadata["source"] = Path(source).name
     logger.info("Loaded %d page(s) from %s/", len(documents), settings.papers_dir)
     logger.info("Total chunks created: %d", len(chunks))
     return chunks
