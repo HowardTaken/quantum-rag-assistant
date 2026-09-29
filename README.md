@@ -134,11 +134,25 @@ curl -X POST localhost:8000/query \
 pytest
 ```
 
-36 tests, all hermetic — LLMs and the vector store are swapped for fakes (`tests/fakes.py`),
+38 tests, all hermetic — LLMs and the vector store are swapped for fakes (`tests/fakes.py`),
 so the suite needs no `GOOGLE_API_KEY` and makes no network calls. Coverage: tool
 formatting/edge cases, the graph's routing logic in isolation, full agent runs through fake
 LLMs (the ReAct tool loop, the grade/retry loop including the max-retry cutoff, multi-turn
-memory, thread isolation), and the API endpoints against a no-op startup lifespan.
+memory, thread isolation), and the API endpoints against a no-op startup lifespan. Runs in CI
+on every push/PR via [`.github/workflows/test-backend.yml`](.github/workflows/test-backend.yml).
+
+Frontend:
+
+```bash
+cd frontend && npm test
+```
+
+21 Vitest + React Testing Library tests: the typed `api.ts` client (success/error paths,
+malformed error bodies), both components (role labels, source chips, disabled/enabled
+states, the retry note), and an `App`-level integration suite that mocks the API module to
+verify the full flow (health check, sending a question, rendering sources, error bubbles,
+thread-id reuse across turns) without a real backend. Also runs in CI, via
+[`.github/workflows/test-frontend.yml`](.github/workflows/test-frontend.yml).
 
 Retrieval quality itself is checked separately, since it needs real embeddings:
 
@@ -153,25 +167,31 @@ the embedding model.
 
 ## Deployment
 
-**Frontend:** live at [howardtaken.github.io/quantum-rag-assistant](https://howardtaken.github.io/quantum-rag-assistant/),
-deployed automatically by [`.github/workflows/deploy-frontend.yml`](.github/workflows/deploy-frontend.yml)
-on every push to `master` that touches `frontend/`. GitHub Pages is configured with
-`build_type: workflow`, so there's no separate hosting account.
+Both pieces are live:
 
-**Backend:** not deployed yet. `Dockerfile` / `render.yaml` are prepped for Render but the
-Docker build itself is still untested (no Docker available in the environment this was built
-in) — deploy via Render's dashboard (New → Blueprint → connect this repo → set
-`GOOGLE_API_KEY` in Render's secret UI, never committed or shared elsewhere) and it'll pick up
-`render.yaml` automatically. Once it's up, set the frontend's build to point at it:
+- **Frontend:** [howardtaken.github.io/quantum-rag-assistant](https://howardtaken.github.io/quantum-rag-assistant/)
+  — deployed automatically by [`.github/workflows/deploy-frontend.yml`](.github/workflows/deploy-frontend.yml)
+  on every push to `master` that touches `frontend/`. GitHub Pages is configured with
+  `build_type: workflow`, so there's no separate hosting account.
+- **Backend:** `https://quantum-rag-agent-api.onrender.com` (`/health`, `/papers`, `/query`)
+  — deployed via Render's dashboard (Blueprint, from `render.yaml`), which built the
+  `Dockerfile` for real and confirmed it works (this had been untested locally, no Docker in
+  the dev environment). Render's free tier spins down on inactivity, so the first request
+  after idle can take 30-60s to wake it up.
+
+The frontend's build bakes in the backend URL via a GitHub Actions repo variable:
 
 ```bash
-gh variable set VITE_API_URL --body "https://<your-render-service>.onrender.com"
+gh variable set VITE_API_URL --body "https://quantum-rag-agent-api.onrender.com"
 ```
 
-then re-run the `Deploy frontend to GitHub Pages` workflow (or push any change under
-`frontend/`) to rebuild with that URL baked in. The backend's CORS (`config.py`'s
-`cors_origins`, overridable via a `CORS_ORIGINS` env var) already allows the GitHub Pages
-origin by default, so no backend change is needed once it's deployed.
+Re-run the `Deploy frontend to GitHub Pages` workflow (or push any change under `frontend/`)
+to rebuild with a different URL. The backend's CORS (`config.py`'s `cors_origins`,
+overridable via a `CORS_ORIGINS` env var) allows the GitHub Pages origin by default.
+
+Verified end-to-end with curl, not just "should work": CORS preflight from the real GitHub
+Pages origin succeeds, a real `/query` call returns a correct answer, and the deployed
+frontend's JS bundle was checked to actually contain the deployed backend's URL.
 
 Streamlit Cloud deploy for `app.py` was considered and skipped on purpose — the React
 frontend + API is the real deployment target; a second hosted UI would just be a second place
@@ -180,13 +200,18 @@ for the API key to live for no real benefit.
 ## Known limitations / next steps
 
 - The Docker image uses the full `requirements.txt` (includes Streamlit/rich, unneeded by
-  the API) rather than a trimmed backend-only dependency list — untrimmed because I couldn't
-  verify a minimal set without being able to actually build the image.
-- The frontend has no visual regression check and wasn't clicked through in an actual
-  browser (no browser automation tool was available) — verified via `npm run build`'s
-  type-check and by replaying the exact cross-origin requests the browser would make with
-  curl, which returned correct data, but that's not the same as eyeballing the rendered UI.
+  the API) rather than a trimmed backend-only dependency list. It does build and run
+  correctly (Render built it for the live deployment), so this is a size/cold-start
+  optimization, not a correctness gap.
+- The frontend's tests mock the API client and were never clicked through in an actual
+  browser (no browser automation tool was available) — verified via component/integration
+  tests, `npm run build`'s type-check, and replaying the real cross-origin requests with
+  curl against the live backend, but none of that is the same as eyeballing the rendered UI.
 - Grading is a second LLM call per answer, which adds latency/cost; a cheaper heuristic
   (e.g. checking citation presence) could gate whether the LLM grader even runs.
-- The backend isn't deployed yet, so the live frontend has nothing to talk to until Render
-  is set up (see Deployment above) and `VITE_API_URL` is pointed at it.
+- No auth or rate-limiting on the API — anyone with the URL can call `/query` and spend the
+  configured Gemini quota. Fine for a portfolio demo; would need an API key or similar before
+  handling real traffic.
+- Conversation memory lives in-process (`MemorySaver`), so it doesn't survive a Render
+  restart/redeploy and wouldn't be shared across multiple instances if this ever scaled
+  horizontally. A persistent checkpointer (e.g. backed by Postgres/Redis) would fix both.
