@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
 
-from config import Settings, _missing_env_error, get_settings
+from config import Settings, get_settings
 
 
 def test_get_settings_returns_settings_when_key_present(monkeypatch):
@@ -17,33 +16,32 @@ def test_get_settings_is_cached(monkeypatch):
     assert get_settings() is get_settings()
 
 
-def test_missing_api_key_raises_validation_error_without_env_file(monkeypatch):
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None)
-
-
-def test_missing_env_error_names_the_variable_and_points_at_example(monkeypatch):
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    with pytest.raises(ValidationError) as exc_info:
-        Settings(_env_file=None)
-    err = _missing_env_error(exc_info.value)
-    assert isinstance(err, RuntimeError)
-    assert "google_api_key" in str(err)
-    assert ".env.example" in str(err)
-
-
-def test_get_settings_wraps_missing_key_as_runtime_error(monkeypatch, tmp_path):
-    # Run from an empty directory so no .env file is picked up either.
+def test_settings_constructs_fine_with_no_api_key(monkeypatch, tmp_path):
+    # Settings() must never require GOOGLE_API_KEY to construct -- code that only reads
+    # unrelated fields (e.g. CORS origins, at module import time) shouldn't need one, and
+    # importing backend.main in a clean environment (like CI) must not blow up.
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
-    get_settings.cache_clear()
-    with pytest.raises(RuntimeError, match=".env.example"):
-        get_settings()
+    settings = Settings()
+    assert settings.google_api_key is None
+
+
+def test_require_google_api_key_raises_a_clear_error_when_missing(monkeypatch, tmp_path):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    settings = Settings()
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY") as exc_info:
+        settings.require_google_api_key()
+    assert ".env.example" in str(exc_info.value)
+
+
+def test_require_google_api_key_returns_the_key_when_present(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "abc123")
+    assert Settings().require_google_api_key() == "abc123"
 
 
 def test_cors_origins_list_splits_and_strips_the_default():
-    settings = Settings(_env_file=None, google_api_key="k")
+    settings = Settings(_env_file=None)
     assert settings.cors_origins_list == [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

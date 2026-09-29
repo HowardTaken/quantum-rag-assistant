@@ -113,12 +113,12 @@ def build_agent(
     tools_list = make_tools(db)
 
     llm = llm or ChatGoogleGenerativeAI(
-        model=settings.llm_model, temperature=0, google_api_key=settings.google_api_key
+        model=settings.llm_model, temperature=0, google_api_key=settings.require_google_api_key()
     )
     llm_with_tools = llm.bind_tools(tools_list)
 
     grader_llm = grader_llm or ChatGoogleGenerativeAI(
-        model=settings.llm_model, temperature=0, google_api_key=settings.google_api_key
+        model=settings.llm_model, temperature=0, google_api_key=settings.require_google_api_key()
     )
 
     def agent_node(state: AgentState) -> dict:

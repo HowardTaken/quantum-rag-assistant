@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def load_vector_store() -> Chroma:
     settings = get_settings()
     embeddings = GoogleGenerativeAIEmbeddings(
-        model=settings.embedding_model, google_api_key=settings.google_api_key
+        model=settings.embedding_model, google_api_key=settings.require_google_api_key()
     )
     return Chroma(
         collection_name=settings.collection_name,

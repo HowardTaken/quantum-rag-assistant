@@ -55,7 +55,7 @@ def embed_with_retry(embed_fn, text, retries=6):
 def embed_and_store(chunks):
     settings = get_settings()
     embedding_model = GoogleGenerativeAIEmbeddings(
-        model=settings.embedding_model, google_api_key=settings.google_api_key
+        model=settings.embedding_model, google_api_key=settings.require_google_api_key()
     )
     client = chromadb.PersistentClient(path=str(settings.chroma_dir))
     collection = client.get_or_create_collection(settings.collection_name)

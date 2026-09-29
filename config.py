@@ -4,14 +4,19 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, ValidationError
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    google_api_key: str = Field(..., description="Google Generative AI API key")
+    # Optional at the config-loading level so Settings() always constructs -- code that
+    # merely reads unrelated fields (e.g. CORS origins, at import time) shouldn't have to
+    # provide a Google API key it doesn't need. Anything that actually calls the Google API
+    # must go through require_google_api_key() below, which is where "fail fast with a
+    # clear message" actually happens.
+    google_api_key: str | None = Field(default=None, description="Google Generative AI API key")
 
     papers_dir: Path = Path("papers")
     chroma_dir: Path = Path("chroma_db")
@@ -40,20 +45,15 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
-
-def _missing_env_error(exc: ValidationError) -> Exception:
-    missing = [str(e["loc"][0]) for e in exc.errors() if e["type"] == "missing"]
-    if not missing:
-        return exc
-    return RuntimeError(
-        f"Missing required environment variable(s): {', '.join(missing)}. "
-        "Copy .env.example to .env and fill in your Google API key."
-    )
+    def require_google_api_key(self) -> str:
+        if not self.google_api_key:
+            raise RuntimeError(
+                "Missing required environment variable: GOOGLE_API_KEY. "
+                "Copy .env.example to .env and fill in your Google API key."
+            )
+        return self.google_api_key
 
 
 @lru_cache
 def get_settings() -> Settings:
-    try:
-        return Settings()
-    except ValidationError as exc:
-        raise _missing_env_error(exc) from exc
+    return Settings()
