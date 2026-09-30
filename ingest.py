@@ -1,6 +1,7 @@
 import logging
 import time
 from pathlib import Path
+from typing import Iterable, Protocol
 
 import chromadb
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -11,6 +12,32 @@ from config import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
+
+
+class UploadedFile(Protocol):
+    """Matches Streamlit's UploadedFile interface -- narrow enough that tests don't need
+    Streamlit installed to construct a fake one."""
+
+    name: str
+
+    def getvalue(self) -> bytes: ...
+
+
+def save_uploaded_pdfs(papers_dir: Path, files: Iterable[UploadedFile]) -> list[Path]:
+    """Write uploaded PDFs into papers_dir, ready for load_and_split()/embed_and_store().
+
+    Not exposed over the public API on purpose (see backend/main.py's docstring on scope) --
+    this is for the local Streamlit app, run by the paper library's owner, not the public.
+    """
+    papers_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for f in files:
+        if not f.name.lower().endswith(".pdf"):
+            raise ValueError(f"Not a PDF: {f.name}")
+        dest = papers_dir / Path(f.name).name  # basename only, no directory traversal
+        dest.write_bytes(f.getvalue())
+        saved.append(dest)
+    return saved
 
 
 def load_and_split():

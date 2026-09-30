@@ -69,7 +69,7 @@ Python.
 | [`backend/`](backend/) | FastAPI service: `POST /query`, `GET /papers`, `GET /health`. |
 | [`frontend/`](frontend/) | React + TypeScript + Vite chat UI for the backend. |
 | [`main.py`](main.py) | Rich-based terminal chat client. |
-| [`app.py`](app.py) | Streamlit web chat client. |
+| [`app.py`](app.py) | Streamlit web chat client, plus a sidebar uploader for adding papers locally. |
 | [`eval/retrieval_eval.py`](eval/retrieval_eval.py) | Manual retrieval-quality check (see below). |
 | [`tests/`](tests/) | Hermetic pytest suite — no network, no real API key needed. |
 
@@ -83,12 +83,24 @@ cp .env.example .env         # then fill in GOOGLE_API_KEY
 ```
 
 A pre-built `chroma_db/` for the three included papers is committed, so you can run
-immediately without ingesting anything. To add your own papers, drop PDFs into `papers/` and
-run:
+immediately without ingesting anything.
 
-```bash
-python ingest.py
-```
+**Adding more papers** — two ways:
+
+- **CLI:** drop PDFs into `papers/` and run `python ingest.py`. Resumable (skips
+  already-embedded chunks) and respects Gemini's rate limits.
+- **Streamlit sidebar** (easier if you're doing this more than once): `streamlit run app.py`,
+  then use the "Add papers" uploader in the sidebar. It saves the PDFs into `papers/` and
+  runs the same ingestion logic, then reloads the vector store so the new papers are
+  searchable immediately in that session. This is local-only by design — uploads were
+  deliberately never added to the public API/frontend (see
+  [Persistence, auth, and rate limiting](#persistence-auth-and-rate-limiting) for why
+  accepting arbitrary uploads from the public internet is a different risk than the
+  read-only `/query` endpoint), so this only affects your own machine.
+
+Either way, `chroma_db/` (and any new PDFs) need to be committed and pushed for the changes
+to reach the deployed backend — Render rebuilds from whatever's in the repo, it doesn't
+ingest anything live.
 
 ## Running it
 
@@ -137,13 +149,14 @@ curl -X POST localhost:8000/query \
 pytest
 ```
 
-49 tests, all hermetic — LLMs and the vector store are swapped for fakes (`tests/fakes.py`),
+55 tests, all hermetic — LLMs and the vector store are swapped for fakes (`tests/fakes.py`),
 so the suite needs no `GOOGLE_API_KEY` and makes no network calls. Coverage: tool
 formatting/edge cases, the graph's routing logic in isolation, full agent runs through fake
 LLMs (the ReAct tool loop, the grade/retry loop including the max-retry cutoff, multi-turn
 memory, thread isolation), the SQLite checkpointer surviving a closed/reopened connection,
-and the API endpoints (auth required/skipped, rate-limit 429s, 503s before startup) against
-a no-op startup lifespan. Runs in CI on every push/PR via
+the API endpoints (auth required/skipped, rate-limit 429s, 503s before startup) against a
+no-op startup lifespan, and the paper-upload helper (path-traversal-safe filename handling,
+non-PDF rejection). Runs in CI on every push/PR via
 [`.github/workflows/test-backend.yml`](.github/workflows/test-backend.yml).
 
 Frontend:
